@@ -10,13 +10,15 @@ if (cluster.isPrimary) {
   const port = num(process.env.PORT, 3000);
   const basePort = num(process.env.BASE_PORT, port + 100);
   const host = process.env.HOST ?? '127.0.0.1';
+  // leave one core for the event loops: instances x threads must not exceed the cores
+  const poolSize = num(process.env.POOL_SIZE, Math.max(1, Math.floor((availableParallelism() - 1) / count)));
   const targets = Array.from({ length: count }, (_, i) => ({ instance: `w${i}`, host: '127.0.0.1', port: basePort + i }));
   const workers = new Map();
   let stopping = false;
   let restartDelay = 500;
 
   const fork = (target) => {
-    const worker = cluster.fork({ INSTANCE: target.instance, PORT: String(target.port) });
+    const worker = cluster.fork({ INSTANCE: target.instance, PORT: String(target.port), POOL_SIZE: String(poolSize) });
     workers.set(target.instance, worker);
     worker.on('exit', (code, signal) => {
       if (stopping) return;
