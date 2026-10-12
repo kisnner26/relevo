@@ -82,6 +82,20 @@ test('fans in the live feed of every instance over one websocket', async () => {
   ws.close();
 });
 
+test('commands sent right after the socket opens are not lost', async () => {
+  const ws = new WebSocket(`ws://${base.slice(7)}/ws`);
+  const enqueued = [];
+  ws.on('message', (raw) => {
+    const msg = JSON.parse(raw.toString());
+    if (msg.type === 'enqueued') enqueued.push(msg.job.id);
+  });
+  await new Promise((resolve) => ws.once('open', resolve));
+  for (let i = 0; i < 10; i++) ws.send(JSON.stringify({ op: 'enqueue', type: 'fib', params: { n: 5 + i } }));
+  await wait(400);
+  assert.equal(enqueued.length, 10);
+  ws.close();
+});
+
 test('stops sending traffic to an instance that goes down and keeps serving', async () => {
   const down = apps[1];
   await down.close();

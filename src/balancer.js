@@ -145,12 +145,10 @@ export function createBalancer({ targets, port = 0, host = '127.0.0.1', healthIn
     return { type: 'error', error: { code: 'BAD_REQUEST', message: 'op must be "enqueue" or "cancel"' } };
   }
 
-  wss.on('connection', async (ws) => {
+  wss.on('connection', (ws) => {
     ws.isAlive = true;
     ws.on('pong', () => (ws.isAlive = true));
-    push(ws, { type: 'hello', instance: 'balancer' });
-    const [jobs, stats] = await Promise.all([aggregatedJobs(new URL('http://x/jobs')), fanOut('/metrics')]);
-    push(ws, { type: 'snapshot', jobs, stats: { instances: stats } });
+    // handlers first: a client may send right after "open", before the snapshot is ready
     ws.on('message', async (raw) => {
       let msg;
       try {
@@ -164,6 +162,10 @@ export function createBalancer({ targets, port = 0, host = '127.0.0.1', healthIn
         push(ws, { type: 'error', ...errorBody(err) });
       }
     });
+    push(ws, { type: 'hello', instance: 'balancer' });
+    Promise.all([aggregatedJobs(new URL('http://x/jobs')), fanOut('/metrics')]).then(([jobs, stats]) =>
+      push(ws, { type: 'snapshot', jobs, stats: { instances: stats } }),
+    );
   });
 
   // keep one upstream socket per healthy instance and relay job events to every client
