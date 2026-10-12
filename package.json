@@ -1,0 +1,19 @@
+{
+  "name": "relevo",
+  "version": "0.1.0",
+  "description": "cpu-bound job service for node: worker_threads pool, rest + graphql + websocket, cluster with its own load balancer",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/main.js",
+    "cluster": "node src/cluster.js",
+    "test": "node --test --test-concurrency=1 test/",
+    "bench": "node bench/bench.js",
+    "profile": "node bench/profile.js"
+  },
+  "dependencies": {
+    "graphql": "^16.9.0",
+    "ws": "^8.18.0"
+  }
+}
