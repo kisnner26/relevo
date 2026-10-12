@@ -1,1 +1,183 @@
-<!doctype html><title>relevo</title>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>relevo</title>
+<style>
+:root{--bg:#0b0b0c;--ink:#f4f1ea;--mute:#8d8a84;--accent:#ff4a1c;--line:rgba(244,241,234,.16);--panel:rgba(244,241,234,.04)}
+*{box-sizing:border-box;margin:0}
+html{background:var(--bg)}
+body{color:var(--ink);font:14px/1.45 -apple-system,'Helvetica Neue',Arial,sans-serif;min-height:100vh;padding:28px 32px 48px;max-width:1280px;margin:0 auto}
+.micro{font:500 10px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.display{font:900 clamp(56px,9vw,120px)/.84 'Anton','Barlow Condensed',Impact,'Arial Narrow',sans-serif;text-transform:uppercase;letter-spacing:-.02em}
+.display em{font-style:normal;color:var(--accent)}
+header{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:1px solid var(--line)}
+#conn.on{color:var(--ink)}
+#conn.on::first-letter{color:var(--accent)}
+h1{margin:44px 0 10px}
+.lede{max-width:560px;color:var(--mute);margin-bottom:36px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);margin-bottom:20px}
+.stat{padding:18px 18px 16px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat b{display:block;font:900 44px/1 'Anton',Impact,'Arial Narrow',sans-serif;letter-spacing:-.01em;margin-top:12px}
+.stat small{display:block;margin-top:6px;color:var(--mute);font-size:12px}
+.inst{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px}
+.card{border:1px solid var(--line);background:var(--panel);padding:14px 16px}
+.card .row{display:flex;justify-content:space-between;margin-bottom:12px}
+.slots{display:flex;gap:4px}
+.slots i{flex:1;height:14px;border:1px solid var(--line)}
+.slots i.busy{background:var(--accent);border-color:var(--accent)}
+.card p{margin-top:10px;color:var(--mute);font-size:12px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin-bottom:18px}
+select,input{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:0;padding:0 14px;height:42px;font:500 12px ui-monospace,'SF Mono',Menlo,monospace}
+input{width:280px}
+select option{background:#151516}
+button{font:500 11px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--accent);background:var(--accent);color:#0b0b0c;border-radius:0;padding:0 22px;height:42px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button:hover{filter:brightness(1.12)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:500}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;font:12px ui-monospace,'SF Mono',Menlo,monospace}
+td.num{text-align:right}
+.bar{height:6px;background:var(--line);width:140px}
+.bar i{display:block;height:100%;background:var(--ink);width:0;transition:width .2s}
+tr.running .bar i{background:var(--accent)}
+.tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+tr.failed .tag,tr.cancelled .tag{color:var(--accent)}
+tr.queued .tag{color:var(--mute)}
+td button{height:26px;padding:0 10px;font-size:10px}
+.note{margin-top:14px;color:var(--mute);font-size:12px}
+@media(max-width:820px){body{padding:18px}.stats{grid-template-columns:repeat(2,1fr)}.stat:nth-child(2n){border-right:0}.stat{border-bottom:1px solid var(--line)}input{width:100%}.hide-s{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <span class="micro">relevo / 001 / worker_threads</span>
+  <span class="micro" id="conn">○ conectando</span>
+</header>
+
+<h1 class="display">Cada hilo.<br><em>Su trabajo.</em></h1>
+<p class="lede">Una cola de trabajos pesados que corre fuera del hilo principal, repartida entre instancias. Lanza una ráfaga y mira cómo se ocupan los hilos mientras el event loop sigue libre.</p>
+
+<section class="stats" aria-label="Estado general">
+  <div class="stat"><span class="micro">Hilos ocupados</span><b id="s-busy">0</b><small id="s-busy-sub">de 0</small></div>
+  <div class="stat"><span class="micro">En cola</span><b id="s-queued">0</b><small id="s-queued-sub">cupo 0</small></div>
+  <div class="stat"><span class="micro">Completados</span><b id="s-done">0</b><small id="s-fail-sub">0 fallidos</small></div>
+  <div class="stat"><span class="micro">Aciertos de caché</span><b id="s-cache">0%</b><small id="s-cache-sub">0 entradas</small></div>
+  <div class="stat"><span class="micro">Event loop p99</span><b id="s-loop">0</b><small>milisegundos</small></div>
+</section>
+
+<section class="inst" id="inst" aria-label="Instancias"></section>
+
+<form class="controls" id="form">
+  <select id="type" aria-label="Tipo de trabajo">
+    <option value="primes">primes</option>
+    <option value="fib">fib</option>
+    <option value="hash">hash</option>
+    <option value="wordfreq">wordfreq</option>
+    <option value="sleep">sleep</option>
+  </select>
+  <input id="params" aria-label="Parámetros en JSON" spellcheck="false">
+  <select id="priority" aria-label="Prioridad">
+    <option value="normal">normal</option>
+    <option value="high">alta</option>
+    <option value="low">baja</option>
+  </select>
+  <button type="submit">Lanzar &#8599;</button>
+  <button type="button" class="ghost" id="burst">Ráfaga x24 &#8599;</button>
+</form>
+
+<table>
+  <thead><tr class="micro">
+    <th>Trabajo</th><th>Tipo</th><th class="hide-s">Parámetros</th><th>Inst.</th><th>Estado</th><th>Avance</th><th class="num">Tiempo</th><th></th>
+  </tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<p class="note" id="note"></p>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const defaults = {
+  primes: { limit: 12000000 }, fib: { n: 38 }, hash: { text: 'relevo', rounds: 400000 },
+  wordfreq: { text: 'la cola reparte el trabajo entre los hilos y la cola se vacia', top: 5 }, sleep: { ms: 1500 },
+};
+const jobs = new Map();
+const STATUS = { queued: 'en cola', running: 'corriendo', done: 'listo', failed: 'fallido', cancelled: 'cancelado' };
+let ws;
+
+const setParams = () => { $('params').value = JSON.stringify(defaults[$('type').value]); };
+$('type').addEventListener('change', setParams);
+setParams();
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onopen = () => { $('conn').textContent = '● conectado'; $('conn').className = 'micro on'; };
+  ws.onclose = () => { $('conn').textContent = '○ reconectando'; $('conn').className = 'micro'; setTimeout(connect, 1000); };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'snapshot') { jobs.clear(); [...msg.jobs].reverse().forEach((j) => jobs.set(j.id, j)); render(); }
+    else if (msg.type === 'job') { jobs.set(msg.job.id, msg.job); schedule(); }
+    else if (msg.type === 'error') { $('note').textContent = msg.error.message; }
+  };
+}
+connect();
+
+let pending = false;
+function schedule() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+
+function render() {
+  const rank = (j) => (j.status === 'running' ? 0 : 1);
+  const list = [...jobs.values()].sort((a, b) => rank(a) - rank(b) || b.createdAt - a.createdAt).slice(0, 40);
+  $('rows').innerHTML = list.map((j) => {
+    const end = j.finishedAt ?? Date.now();
+    const time = j.cached ? 'caché' : j.startedAt ? `${((end - j.startedAt) / 1000).toFixed(2)} s` : '-';
+    const extra = j.cached ? ' / caché' : j.shared ? ' / compartido' : '';
+    const cancel = j.status === 'queued' || j.status === 'running' ? `<button class="ghost" data-id="${j.id}">Cancelar</button>` : '';
+    return `<tr class="${j.status}"><td>${j.id}</td><td>${j.type}</td><td class="hide-s">${short(j.params)}</td><td>${j.instance}</td>
+      <td class="tag">${STATUS[j.status]}${extra}</td><td><div class="bar"><i style="width:${Math.round((j.progress || 0) * 100)}%"></i></div></td>
+      <td class="num">${time}</td><td>${cancel}</td></tr>`;
+  }).join('');
+}
+const short = (p) => { const s = JSON.stringify(p); return s.length > 40 ? s.slice(0, 39) + '…' : s; };
+
+$('rows').addEventListener('click', (e) => {
+  const id = e.target.dataset?.id;
+  if (id && ws.readyState === 1) ws.send(JSON.stringify({ op: 'cancel', id }));
+});
+
+function enqueue(type, params, priority) { ws.send(JSON.stringify({ op: 'enqueue', type, params, priority })); }
+$('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  try { enqueue($('type').value, JSON.parse($('params').value), $('priority').value); $('note').textContent = ''; }
+  catch { $('note').textContent = 'Los parámetros no son JSON válido.'; }
+});
+$('burst').addEventListener('click', () => {
+  for (let i = 0; i < 24; i++) enqueue('hash', { text: 'relevo', rounds: 1500000 + i * 60000 }, 'normal');
+  $('note').textContent = 'Ráfaga: 24 trabajos distintos, ninguno sale de la caché.';
+});
+
+async function pollMetrics() {
+  try {
+    const body = await (await fetch('/metrics')).json();
+    const items = body.instances ?? [body];
+    const sum = (f) => items.reduce((n, i) => n + f(i), 0);
+    const size = sum((i) => i.pool.size), busy = sum((i) => i.pool.busy);
+    const hits = sum((i) => i.cache.hits), misses = sum((i) => i.cache.misses);
+    $('s-busy').textContent = busy; $('s-busy-sub').textContent = `de ${size}`;
+    $('s-queued').textContent = sum((i) => i.pool.queued); $('s-queued-sub').textContent = `cupo ${sum((i) => i.pool.maxQueue)}`;
+    $('s-done').textContent = sum((i) => i.pool.completed); $('s-fail-sub').textContent = `${sum((i) => i.pool.failed)} fallidos`;
+    $('s-cache').textContent = hits + misses ? Math.round((hits / (hits + misses)) * 100) + '%' : '0%';
+    $('s-cache-sub').textContent = `${sum((i) => i.cache.size)} entradas`;
+    $('s-loop').textContent = Math.max(...items.map((i) => i.eventLoop.p99)).toFixed(1);
+    $('inst').innerHTML = items.map((i) => `<div class="card"><div class="row"><span class="micro">${i.instance} / pid ${i.pid}</span><span class="micro">${i.pool.busy} / ${i.pool.size}</span></div>
+      <div class="slots">${Array.from({ length: i.pool.size }, (_, k) => `<i class="${k < i.pool.busy ? 'busy' : ''}"></i>`).join('')}</div>
+      <p>${i.pool.queued} en cola, ${i.pool.completed} listos, ${i.memoryMb} MB</p></div>`).join('');
+  } catch { /* the next tick retries */ }
+}
+setInterval(pollMetrics, 800);
+pollMetrics();
+</script>
+</body>
+</html>
